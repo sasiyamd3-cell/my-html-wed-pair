@@ -1,0 +1,194 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sakura Bot | Dashboard</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,sans-serif;background:#080912;color:#fff;min-height:100vh;padding:20px}
+.container{max-width:850px;margin:auto}
+header{text-align:center;padding:35px 10px}
+.logo{font-size:38px;font-weight:900;color:#ff72bd}
+header p{color:#9298aa;margin-top:10px}
+.tabs{display:flex;gap:10px;margin-bottom:20px}
+button{cursor:pointer;border:0;border-radius:10px;padding:14px;font-weight:bold}
+.tab{flex:1;background:#191b2b;color:white}
+.tab.active,.main-btn{background:linear-gradient(120deg,#e94caa,#8648ef);color:white}
+.panel{display:none;background:#121525;border:1px solid #292d43;border-radius:18px;padding:25px}
+.panel.active{display:block}
+h2{margin-bottom:20px}
+label{display:block;color:#b5bad0;margin:16px 0 8px}
+input,textarea{width:100%;padding:14px;background:#090d19;border:1px solid #343951;border-radius:10px;color:white;font-size:15px;outline:none}
+textarea{height:280px;font-family:monospace;resize:vertical}
+button.main-btn{width:100%;margin-top:18px}
+.secondary{width:100%;margin-top:10px;background:#252b40;color:white}
+.result{background:#090d19;padding:18px;border-radius:12px;margin-top:18px;text-align:center}
+.code{font-size:30px;letter-spacing:5px;color:#ff72bd;margin:15px}
+.status{color:#b5bad0;margin-top:14px;overflow-wrap:anywhere}
+.hidden{display:none}
+footer{text-align:center;padding:25px;color:#737a91;font-size:13px}
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+<div class="logo">🌸 SAKURA BOT</div>
+<p>Premium WhatsApp Bot Dashboard</p>
+</header>
+
+<div class="tabs">
+<button class="tab active" onclick="tab('pair',this)">PAIRING</button>
+<button class="tab" onclick="tab('settings',this)">SETTINGS</button>
+</div>
+
+<section id="pair" class="panel active">
+<h2>Connect WhatsApp</h2>
+<label>WhatsApp Number</label>
+<input id="number" placeholder="94771234567" inputmode="numeric">
+<button class="main-btn" onclick="pair()">GET PAIRING CODE</button>
+<div id="pairResult" class="result hidden">
+<p>Your Pairing Code</p>
+<div id="code" class="code"></div>
+<button class="secondary" onclick="copyCode()">COPY CODE</button>
+</div>
+<p id="pairStatus" class="status"></p>
+</section>
+
+<section id="settings" class="panel">
+<h2>Bot Settings</h2>
+<div id="login">
+<label>WhatsApp Number</label>
+<input id="loginNumber" placeholder="94771234567">
+<label>Password</label>
+<input id="password" type="password" placeholder="Settings Password">
+<button class="main-btn" onclick="login()">LOGIN</button>
+</div>
+
+<div id="editor" class="hidden">
+<p id="account" class="status"></p>
+<label>Bot Configuration JSON</label>
+<textarea id="config" spellcheck="false"></textarea>
+<label>Settings Mongo URI (Optional)</label>
+<input id="uri" type="password" placeholder="MongoDB URI">
+<button class="main-btn" onclick="save()">SAVE SETTINGS</button>
+<button class="secondary" onclick="reloadSettings()">RELOAD</button>
+<button class="secondary" onclick="logout()">LOGOUT</button>
+</div>
+<p id="settingsStatus" class="status"></p>
+</section>
+<footer>SAKURA BOT © 2026</footer>
+</div>
+
+<script>
+// CHANGE THIS TO YOUR SA KURA BACKEND URL
+const API = "https://backendda1-1f75a6d6229f.herokuapp.com//api/pair";
+
+let userNumber="",userPassword="",pairCode="";
+
+function tab(id,btn){
+ document.querySelectorAll(".panel").forEach(x=>x.classList.remove("active"));
+ document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
+ document.getElementById(id).classList.add("active");
+ btn.classList.add("active");
+}
+
+function numberClean(v){return v.replace(/\D/g,"")}
+
+async function pair(){
+ const n=numberClean(document.getElementById("number").value);
+ const status=document.getElementById("pairStatus");
+ document.getElementById("pairResult").classList.add("hidden");
+ if(n.length<10||n.length>15){status.textContent="Enter a valid phone number.";return}
+ status.textContent="Requesting pairing code...";
+ try{
+  const r=await fetch(API+"/?number="+encodeURIComponent(n));
+  const d=await r.json();
+  if(!r.ok)throw Error(d.error||d.message||"Pairing failed");
+  if(d.code){
+   pairCode=d.code;
+   document.getElementById("code").textContent=d.code;
+   document.getElementById("pairResult").classList.remove("hidden");
+   status.textContent="Code generated. Complete linking in WhatsApp.";
+  }else status.textContent=d.message||d.status||"No code returned.";
+ }catch(e){status.textContent="Error: "+e.message}
+}
+
+async function copyCode(){
+ try{
+  await navigator.clipboard.writeText(pairCode);
+  document.getElementById("pairStatus").textContent="Code copied!";
+ }catch(e){document.getElementById("pairStatus").textContent="Please copy manually."}
+}
+
+async function post(path,data){
+ const r=await fetch(API+path,{
+  method:"POST",
+  headers:{"Content-Type":"application/json"},
+  body:JSON.stringify(data)
+ });
+ const d=await r.json();
+ if(!r.ok||!d.ok)throw Error(d.error||d.message||"Request failed");
+ return d;
+}
+
+async function login(){
+ const n=numberClean(document.getElementById("loginNumber").value);
+ const p=document.getElementById("password").value;
+ const s=document.getElementById("settingsStatus");
+ if(!n||!p){s.textContent="Enter number and password.";return}
+ s.textContent="Checking login...";
+ try{
+  const d=await post("/api/settings/login",{number:n,password:p});
+  userNumber=n;userPassword=p;
+  document.getElementById("login").classList.add("hidden");
+  document.getElementById("editor").classList.remove("hidden");
+  document.getElementById("account").textContent="Account: "+n;
+  document.getElementById("config").value=JSON.stringify(d.config||{},null,2);
+  document.getElementById("uri").value=d.settingsUri||"";
+  s.textContent="Login successful.";
+ }catch(e){s.textContent=e.message}
+}
+
+async function reloadSettings(){
+ const s=document.getElementById("settingsStatus");
+ s.textContent="Loading...";
+ try{
+  const d=await post("/api/settings/get",{number:userNumber,password:userPassword});
+  document.getElementById("config").value=JSON.stringify(d.config||{},null,2);
+  document.getElementById("uri").value=d.settingsUri||"";
+  s.textContent="Settings loaded.";
+ }catch(e){s.textContent=e.message}
+}
+
+async function save(){
+ const s=document.getElementById("settingsStatus");
+ let config;
+ try{
+  config=JSON.parse(document.getElementById("config").value);
+  if(!config||typeof config!=="object"||Array.isArray(config))throw Error("JSON must be an object");
+ }catch(e){s.textContent="Invalid JSON: "+e.message;return}
+ s.textContent="Saving...";
+ try{
+  const d=await post("/api/settings/update",{
+   number:userNumber,
+   password:userPassword,
+   config,
+   settingsUri:document.getElementById("uri").value
+  });
+  document.getElementById("config").value=JSON.stringify(d.config||config,null,2);
+  s.textContent="Settings saved successfully.";
+ }catch(e){s.textContent=e.message}
+}
+
+function logout(){
+ userNumber="";userPassword="";
+ document.getElementById("login").classList.remove("hidden");
+ document.getElementById("editor").classList.add("hidden");
+ document.getElementById("password").value="";
+ document.getElementById("settingsStatus").textContent="Logged out.";
+}
+</script>
+</body>
+</html>
